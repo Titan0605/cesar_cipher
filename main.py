@@ -1,4 +1,4 @@
-import sys
+from flask import Flask, request, jsonify
 from enum import Enum
 
 class Alphabet(Enum):
@@ -9,7 +9,7 @@ class CesarCipher:
     def __init__(self) -> None:
         pass
     
-    def encrypt(self, text: str, shift: str, alphabet: Alphabet) -> str:
+    def encrypt(self, text: str, shift: int, alphabet: Alphabet) -> str:
         result = []
         alphabet_length = len(alphabet.value)
         
@@ -20,13 +20,13 @@ class CesarCipher:
                 result.append(char)
                 continue
             
-            new_char = alphabet.value[(char_index + int(shift)) % alphabet_length]
+            new_char = alphabet.value[(char_index + shift) % alphabet_length]
             # Preserve uppercase if the original character was uppercase
             result.append(new_char.upper() if char.isupper() else new_char)
             
         return "".join(result)
     
-    def decrypt(self, text: str, shift: str, alphabet: Alphabet) -> str:
+    def decrypt(self, text: str, shift: int, alphabet: Alphabet) -> str:
         result = []
         alphabet_length = len(alphabet.value)
         
@@ -37,38 +37,48 @@ class CesarCipher:
                 result.append(char)
                 continue
             
-            new_char = alphabet.value[(char_index - int(shift)) % alphabet_length]
+            new_char = alphabet.value[(char_index - shift) % alphabet_length]
             # Preserve uppercase if the original character was uppercase
             result.append(new_char.upper() if char.isupper() else new_char)
             
         return "".join(result)
+
+
+cipher = CesarCipher()
+
+app = Flask(__name__)
+
+def get_alphabet(alphabet_key: int) -> Alphabet:
+    match alphabet_key:
+        case 2:
+            return Alphabet.SPANISH
+        case _:
+            return Alphabet.ENGLISH
+
+@app.route('/api/encrypt', methods=['POST'])
+def encrypt_endpoint():
+    data = request.get_json()
     
-    
+    text = data.get('text', '')
+    shift = data.get('shift', 0)
+    alphabet_key = data.get('alphabet', 1)  # 1 = English, 2 = Spanish
+
+    selected_alphabet = get_alphabet(alphabet_key)
+    result = cipher.encrypt(text, shift, selected_alphabet)
+
+    return jsonify({'result': result})
+
+@app.route('/api/decrypt', methods=['POST'])
+def decrypt_endpoint():
+    data = request.get_json()
+    text = data.get('text', '')
+    shift = data.get('shift', 0)
+    alphabet_key = data.get('alphabet', 1)  # 1 = English, 2 = Spanish
+
+    selected_alphabet = get_alphabet(alphabet_key)
+    result = cipher.decrypt(text, shift, selected_alphabet)
+
+    return jsonify({'result': result})
+
 if __name__ == "__main__":
-    cipher = CesarCipher()
-    
-    action_in = int(input("What do you want to do? \n 1) Encrypt\n 2) Decrypt\n: "))
-    text_in = input("Insert the text: ")
-    shift_in = input("How many shifts do you want? ")
-    alphabet_in = int(input("Which alphabet do you want? \n 1) English\n 2) Spanish\n: "))
-    
-    match alphabet_in:
-        case 1:
-            selected_alphabet = Alphabet.ENGLISH
-        case 2:
-            selected_alphabet = Alphabet.SPANISH
-        case _:
-            print("Invalid option. Using the English alphabet by default.")
-            selected_alphabet = Alphabet.ENGLISH
-        
-    match action_in:
-        case 1:
-            result = cipher.encrypt(text_in, shift_in, selected_alphabet)
-            print("Encrypted text: " + result)
-        case 2:
-            result = cipher.decrypt(text_in, shift_in, selected_alphabet)
-            print("Decrypted text: " + result)
-        case _:
-            print("Invalid option. Encrypting by default.")
-            result = cipher.encrypt(text_in, shift_in, selected_alphabet)
-            print("Encrypted text: " + result)
+    app.run(debug=True)
