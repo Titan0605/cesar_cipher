@@ -35,69 +35,81 @@ def get_alphabet(alphabet_key: int) -> Alphabet:
 
 @app.route('/api/encrypt', methods=['POST'])
 def encrypt_endpoint():
-    data = request.get_json()
-    
-    text = data.get('text', '')
-    shift = data.get('shift', 0)
-    alphabet_key = data.get('alphabet', 1)  # 1 = English, 2 = Spanish
+    try:
+        data = request.get_json()
+        
+        text = data.get('text', '')
+        shift = data.get('shift', 0)
+        alphabet_key = data.get('alphabet', 1)  # 1 = English, 2 = Spanish
 
-    selected_alphabet = get_alphabet(alphabet_key)
-    result = cipher.encrypt(text, shift, selected_alphabet)
+        selected_alphabet = get_alphabet(alphabet_key)
+        result = cipher.encrypt(text, shift, selected_alphabet)
 
-    return jsonify({'result': result})
+        return jsonify({'result': result, 'message': 'Encrypted successfully' , 'status': '200'}), 200
+    except Exception as e:
+        return jsonify({'message': 'Internal server error', 'status': '500'}), 500
 
 @app.route('/api/decrypt', methods=['POST'])
 def decrypt_endpoint():
-    data = request.get_json()
-    text = data.get('text', '')
-    shift = data.get('shift', 0)
-    alphabet_key = data.get('alphabet', 1)  # 1 = English, 2 = Spanish
+    try:
+        data = request.get_json()
+        text = data.get('text', '')
+        shift = data.get('shift', 0)
+        alphabet_key = data.get('alphabet', 1)  # 1 = English, 2 = Spanish
 
-    selected_alphabet = get_alphabet(alphabet_key)
-    result = cipher.decrypt(text, shift, selected_alphabet)
+        selected_alphabet = get_alphabet(alphabet_key)
+        result = cipher.decrypt(text, shift, selected_alphabet)
 
-    return jsonify({'result': result})
+        return jsonify({'result': result, 'message': 'Decrypted successfully' , 'status': '200'}), 200
+    except Exception as e:
+        return jsonify({'message': 'Internal server error', 'status': '500'}), 500
 
 @app.route('/api/register', methods=['POST'])
 def register_endpoint():
-    data = request.get_json()
-    
-    username = data.get('username', '')
-    password = data.get('password', '')
-    
-    db = get_db(DB_PATH)
+    try:
+        data = request.get_json()
+        
+        username = data.get('username', '')
+        password = data.get('password', '')
+        
+        db = get_db(DB_PATH)
 
-    row = db.execute('SELECT 1 FROM users WHERE username = ?', (username,)).fetchone()
+        row = db.execute('SELECT 1 FROM users WHERE username = ?', (username,)).fetchone()
 
-    if row is not None:
-        return jsonify({'message': 'User already exists', 'status': '409'})
-    
-    db.execute(
-        'INSERT INTO users (username, password_hash) VALUES (?, ?)',
-        (username, security.generate_password_hash(password))
-    )
-    db.commit()
-    
-    return jsonify({'message': 'User registered', 'status': '201'})
+        if row is not None:
+            return jsonify({'message': 'User already exists', 'status': '409'}), 409
+        
+        db.execute(
+            'INSERT INTO users (username, password_hash) VALUES (?, ?)',
+            (username, security.generate_password_hash(password))
+        )
+        db.commit()
+        
+        return jsonify({'message': 'User registered', 'status': '201'}), 201
+    except Exception as e:
+        return jsonify({'message': 'Internal server error', 'status': '500'}), 500
 
 @app.route('/api/login', methods=['POST'])
 def login_endpoint():
-    data = request.get_json()
-    
-    username = data.get('username', '')
-    password = data.get('password', '')
-    
-    db = get_db(DB_PATH)
-    
-    row = db.execute('SELECT password_hash AS hash FROM users WHERE username = ?', (username,)).fetchone()
-    
-    if row is None:
-        return jsonify({'message': 'User doesn\'t exists', 'status': '404'})
-    
-    if not security.check_password_hash(row['hash'], password):
-        return jsonify({'message': 'Incorrect credentials', 'status': '401'})
-    
-    return jsonify({'message': 'Login succesful', 'status': '200'})
+    try:
+        data = request.get_json()
+        
+        username = data.get('username', '')
+        password = data.get('password', '')
+        
+        db = get_db(DB_PATH)
+        
+        row = db.execute('SELECT password_hash AS hash FROM users WHERE username = ?', (username,)).fetchone()
+        
+        if row is None:
+            return jsonify({'message': 'User doesn\'t exists', 'status': '404'}), 404
+        
+        if not security.check_password_hash(row['hash'], password):
+            return jsonify({'message': 'Incorrect credentials', 'status': '401'}), 401
+        
+        return jsonify({'message': 'Login succesful', 'status': '200'}), 200
+    except Exception as e:
+        return jsonify({'message': 'Internal server error', 'status': '500'}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
