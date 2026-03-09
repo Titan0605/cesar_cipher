@@ -1,52 +1,30 @@
-from flask import Flask, request, jsonify
-from enum import Enum
+from flask import Flask, request, jsonify, g
+from werkzeug import security
+import sqlite3 as sql
 
-class Alphabet(Enum):
-    ENGLISH = "abcdefghijklmnopqrstuvwxyz"
-    SPANISH = "abcdefghijklmnñopqrstuvwxyz"
+from classes import CesarCipher
+from enums import Alphabet
+from utils.db import init_db, get_db
 
-class CesarCipher:
-    def __init__(self) -> None:
-        pass
-    
-    def encrypt(self, text: str, shift: int, alphabet: Alphabet) -> str:
-        result = []
-        alphabet_length = len(alphabet.value)
-        
-        for char in text:
-            char_index = alphabet.value.find(char.lower())
-            
-            if char_index == -1: # When find() doesn't find the char, appends the exact char 
-                result.append(char)
-                continue
-            
-            new_char = alphabet.value[(char_index + shift) % alphabet_length]
-            # Preserve uppercase if the original character was uppercase
-            result.append(new_char.upper() if char.isupper() else new_char)
-            
-        return "".join(result)
-    
-    def decrypt(self, text: str, shift: int, alphabet: Alphabet) -> str:
-        result = []
-        alphabet_length = len(alphabet.value)
-        
-        for char in text:
-            char_index = alphabet.value.find(char.lower())
-            
-            if char_index == -1: # When find() doesn't find the char, appends the exact char 
-                result.append(char)
-                continue
-            
-            new_char = alphabet.value[(char_index - shift) % alphabet_length]
-            # Preserve uppercase if the original character was uppercase
-            result.append(new_char.upper() if char.isupper() else new_char)
-            
-        return "".join(result)
-
+DB_PATH = 'users.db'
+CREATE_USERS_TABLE = '''
+    CREATE TABLE IF NOT EXISTS users (
+        username TEXT PRIMARY KEY NOT NULL,
+        password_hash TEXT NOT NULL
+    )
+'''
 
 cipher = CesarCipher()
-
 app = Flask(__name__)
+    
+@app.teardown_appcontext
+def close_db(error=None):
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
+
+with app.app_context():
+    init_db(DB_PATH, CREATE_USERS_TABLE)
 
 def get_alphabet(alphabet_key: int) -> Alphabet:
     match alphabet_key:
@@ -79,6 +57,47 @@ def decrypt_endpoint():
     result = cipher.decrypt(text, shift, selected_alphabet)
 
     return jsonify({'result': result})
+
+@app.route('/api/register', methods=['POST'])
+def register_endpoint():
+    data = request.get_json()
+    
+    username = data.get('username', '')
+    password = data.get('password', '')
+    
+    db = get_db(DB_PATH)
+
+    row = db.execute('SELECT 1 FROM users WHERE username = ?', (username,)).fetchone()
+
+    if row is not None:
+        return jsonify({'message': 'User already exists', 'status': '409'})
+    
+    db.execute(
+        'INSERT INTO users (username, password_hash) VALUES (?, ?)',
+        (username, security.generate_password_hash(password))
+    )
+    db.commit()
+    
+    return jsonify({'message': 'User registered', 'status': '201'})
+
+@app.route('/api/login', methods=['POST'])
+def login_endpoint():
+    data = request.get_json()
+    
+    username = data.get('username', '')
+    password = data.get('password', '')
+    
+    db = get_db(DB_PATH)
+    
+    row = db.execute('SELECT password_hash AS hash FROM users WHERE username = ?', (username,)).fetchone()
+    
+    if row is None:
+        return jsonify({'message': 'User doesn\'t exists', 'status': '404'})
+    
+    if not security.check_password_hash(row['hash'], password):
+        return jsonify({'message': 'Incorrect credentials', 'status': '401'})
+    
+    return jsonify({'message': 'Login succesful', 'status': '200'})
 
 if __name__ == "__main__":
     app.run(debug=True)
